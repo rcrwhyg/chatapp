@@ -52,6 +52,13 @@ export default {
     channels() {
       return this.$store.getters.getChannels;
     },
+    activeChannelId() {
+      const channel = this.$store.state.activeChannel;
+      if (!channel) {
+        return null;
+      }
+      return channel.id;
+    },
     singleChannels() {
       // Placeholder for direct messages, if needed.
       // This could be another state managed by Vuex.
@@ -81,14 +88,18 @@ export default {
       };
       this.$store.dispatch('addChannel', newChannel);
     },
-    mounted() {
-      // Listen for clicks outside of the dropdown menu
-      document.addEventListener('click', this.handleOutsideClick);
+    selectChannel(channelId) {
+      // Trigger an action to select a channel
+      this.$store.dispatch('setActiveChannel', channelId);
     },
-    beforeDestroy() {
-      // Cleanup the event listener when the component is destroyed
-      document.removeEventListener('click', this.handleOutsideClick);
-    },
+  },
+  mounted() {
+    // Listen for clicks outside of the dropdown menu
+    document.addEventListener('click', this.handleOutsideClick);
+  },
+  beforeDestroy() {
+    // Cleanup the event listener when the component is destroyed
+    document.removeEventListener('click', this.handleOutsideClick);
   },
 };
 </script>

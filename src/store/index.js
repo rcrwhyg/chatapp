@@ -11,6 +11,7 @@ export default createStore({
     channels: [], // List of channels
     messages: {}, // Messages hashmap, keyed by channel ID
     users: {}, // Users hashmap under the current workspace, keyed by user ID
+    activeChannel: null,
   },
   mutations: {
     setUser(state, user) {
@@ -28,8 +29,17 @@ export default createStore({
     setUsers(state, users) {
       state.users = users;
     },
-    setMessages(state, messages) {
-      state.messages = messages;
+    setMessages(state, { channelId, messages }) {
+      state.messages[channelId] = messages;
+    },
+    setMessagesForChannel(state, { channelId, messages }) {
+      state.messages[channelId] = messages;
+    },
+    setActiveChannel(state, channelId) {
+      const channel = state.channels.find(
+        (channel) => channel.id === channelId
+      );
+      state.activeChannel = channel;
     },
     addChannel(state, channel) {
       state.channels.push(channel);
@@ -47,6 +57,7 @@ export default createStore({
       const token = localStorage.getItem("token");
       const workspace = localStorage.getItem("workspace");
       const channels = localStorage.getItem("channels");
+      // we do not store messages in local storage, so this is always empty
       const messages = localStorage.getItem("messages");
       const users = localStorage.getItem("users");
 
@@ -115,12 +126,55 @@ export default createStore({
       commit("setChannels", []);
       commit("setMessages", {});
     },
+    setActiveChannel({ commit }, channel) {
+      commit("setActiveChannel", channel);
+    },
     addChannel({ commit }, channel) {
       commit("addChannel", channel);
 
       // Update the channels and messages in local storage
       localStorage.setItem("channels", JSON.stringify(this.state.channels));
       localStorage.setItem("messages", JSON.stringify(this.state.messages));
+    },
+    async fetchMessagesForChannel({ state, commit }, channelId) {
+      if (
+        !state.messages[channelId] ||
+        state.messages[channelId].length === 0
+      ) {
+        try {
+          const response = await axios.get(
+            `${getUrlBase()}/chats/${channelId}/messages`,
+            {
+              headers: {
+                Authorization: `Bearer ${state.token}`,
+              },
+            }
+          );
+          /* We should convert sender_id to user object
+          [
+            {
+              "id": 1,
+              "chat_id": 1,
+              "sender_id": 1,
+              "content": "Hello, World!",
+              "files": [],
+              "created_at": "2024-08-18T04:07:54.087786Z"
+            }
+          ]
+          */
+          let messages = response.data;
+          messages = messages.map((message) => {
+            const user = state.users[message.senderId];
+            return { ...message, sender: user };
+          });
+          commit("setMessages", { channelId, messages });
+        } catch (error) {
+          console.error(
+            `Failed to fetch messages for channel ${channelId}`,
+            error
+          );
+        }
+      }
     },
     addMessage({ commit }, { channelId, message }) {
       commit("addMessage", { channelId, message });
@@ -159,6 +213,12 @@ export default createStore({
     },
     getChannelMessages: (state) => (channelId) => {
       return state.messages[channelId] || [];
+    },
+    getMessagesForActiveChannel(state) {
+      if (!state.activeChannel) {
+        return [];
+      }
+      return state.messages[state.activeChannel.id] || [];
     },
   },
 });
