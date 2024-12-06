@@ -5,7 +5,7 @@
       <form @submit.prevent="register">
         <div class="form-group">
           <label for="fullName">Full Name</label>
-          <input type="text" id="fullName" v-model="fullName" placeholder="Enter your full name" required />
+          <input type="text" id="full_name" v-model="full_name" placeholder="Enter your full name" required />
         </div>
   
         <div class="form-group">
@@ -15,7 +15,7 @@
   
         <div class="form-group">
           <label for="workspaceName">Workspace Name</label>
-          <input type="text" id="workspaceName" v-model="workspaceName" placeholder="Enter your workspace name" required />
+          <input type="text" id="workspace" v-model="workspace" placeholder="Enter your workspace name" required />
         </div>
   
         <div class="form-group">
@@ -36,23 +36,27 @@
   export default {
     data() {
       return {
-        fullName: '',
+        full_name: '',
         email: '',
-        workspaceName: '',
+        workspace: '',
         password: '',
       };
     },
     methods: {
-      register() {
-        const userData = {
-          fullName: this.fullName,
-          email: this.email,
-          workspaceName: this.workspaceName,
-          password: this.password,
-        };
-  
-        console.log('User Data:', userData);
-        this.$router.push('/chat');
+      async register() {
+        try {
+          const user = await this.$store.dispatch('signup', {
+            workspace: this.workspace,
+            full_name: this.full_name,
+            email: this.email,
+            password: this.password,
+          });
+
+          console.log('Signup successful, user: ', user);
+          this.$router.push('/');
+        } catch (error) {
+          console.error('Error signing up: ', error);
+        }
       },
     },
   };
