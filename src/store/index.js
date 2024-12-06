@@ -5,11 +5,12 @@ import { getUrlBase } from "../utils";
 
 export default createStore({
   state: {
-    user: null,
-    token: null,
-    workspace: {},
-    channels: [],
-    messages: {},
+    user: null, // User information
+    token: null, // Authentication token
+    workspace: {}, // Current workspace
+    channels: [], // List of channels
+    messages: {}, // Messages hashmap, keyed by channel ID
+    users: {}, // Users hashmap under the current workspace, keyed by user ID
   },
   mutations: {
     setUser(state, user) {
@@ -23,6 +24,9 @@ export default createStore({
     },
     setChannels(state, channels) {
       state.channels = channels;
+    },
+    setUsers(state, users) {
+      state.users = users;
     },
     setMessages(state, messages) {
       state.messages = messages;
@@ -44,6 +48,7 @@ export default createStore({
       const workspace = localStorage.getItem("workspace");
       const channels = localStorage.getItem("channels");
       const messages = localStorage.getItem("messages");
+      const users = localStorage.getItem("users");
 
       if (user) {
         state.user = JSON.parse(user);
@@ -60,6 +65,9 @@ export default createStore({
       if (messages) {
         state.messages = JSON.parse(messages);
       }
+      if (users) {
+        state.users = JSON.parse(users);
+      }
     },
   },
   actions: {
@@ -72,7 +80,7 @@ export default createStore({
           password,
         });
 
-        const user = saveUser(response, commit);
+        const user = await loadState(response, commit);
         return user;
       } catch (error) {
         console.error("Signup failed", error);
@@ -86,7 +94,7 @@ export default createStore({
           password,
         });
 
-        const user = saveUser(response, commit);
+        const user = await loadState(response, commit);
         return user;
       } catch (error) {
         console.error("Signin failed", error);
@@ -135,7 +143,19 @@ export default createStore({
       return state.workspace;
     },
     getChannels(state) {
-      return state.channels;
+      // filter out channels that type == 'single'
+      return state.channels.filter((channel) => channel.type !== "single");
+    },
+    getSingleChannels(state) {
+      const channels = state.channels.filter(
+        (channel) => channel.type === "single"
+      );
+      // return channel member that is not the current user
+      return channels.map((channel) => {
+        const id = channel.members.find((id) => id !== state.user.id);
+        channel.recipient = state.users[id];
+        return channel;
+      });
     },
     getChannelMessages: (state) => (channelId) => {
       return state.messages[channelId] || [];
@@ -143,17 +163,46 @@ export default createStore({
   },
 });
 
-function saveUser(response, commit) {
+async function loadState(response, commit) {
   const token = response.data.token;
   const user = jwtDecode(token);
   const workspace = { id: user.wsId, name: user.wsName };
 
-  localStorage.setItem("user", JSON.stringify(user));
-  localStorage.setItem("token", token);
-  localStorage.setItem("workspace", JSON.stringify(workspace));
+  try {
+    // fetch all workspace users
+    const usersResp = await axios.get(`${getUrlBase()}/users`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const users = usersResp.data;
+    const usersMap = {};
+    users.forEach((user) => {
+      usersMap[user.id] = user;
+    });
 
-  commit("setUser", user);
-  commit("setToken", token);
-  commit("setWorkspace", workspace);
-  return user;
+    // fetch all my channels
+    const chatsResp = await axios.get(`${getUrlBase()}/chats`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const channels = chatsResp.data;
+
+    localStorage.setItem("user", JSON.stringify(user));
+    localStorage.setItem("token", token);
+    localStorage.setItem("workspace", JSON.stringify(workspace));
+    localStorage.setItem("users", JSON.stringify(usersMap));
+    localStorage.setItem("channels", JSON.stringify(channels));
+
+    commit("setUser", user);
+    commit("setToken", token);
+    commit("setWorkspace", workspace);
+    commit("setChannels", channels);
+    commit("setUsers", usersMap);
+    return user;
+  } catch (error) {
+    console.error("Failed to load user state", error);
+    throw error;
+  }
 }
