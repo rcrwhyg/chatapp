@@ -9,6 +9,7 @@ pub struct ServerConfig {
     pub notification: String,
 }
 
+/// app config
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AppConfig {
     pub server: ServerConfig,
